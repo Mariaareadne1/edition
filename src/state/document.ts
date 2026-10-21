@@ -70,13 +70,13 @@ const REG0: Registration = { dx: 0, dy: 0, rotate: 0 }
 
 export const DEFAULT_SETTINGS: PrintSettings = {
   inks: [
-    { name: 'Deep cobalt', color: '#1f3a93', opacity: 0.92, enabled: true },
-    { name: 'Warm coral', color: '#f4664a', opacity: 0.9, enabled: true },
+    { name: 'Deep cobalt', color: '#1f3a93', opacity: 0.96, enabled: true },
+    { name: 'Warm coral', color: '#f4664a', opacity: 0.92, enabled: true },
   ],
-  separation: { contrast: 1.15, density: 0.02, accent: 1.2, balance: 0.65 },
-  screen: { ruling: 110, angles: [15, 75] },
+  separation: { contrast: 1.35, density: 0.04, accent: 1.3, balance: 0.7 },
+  screen: { ruling: 150, angles: [15, 75] },
   registration: [REG0, { dx: 0.6, dy: -0.4, rotate: 0.3 }],
-  paper: { color: '#f4efe4', grain: 0.45, inkTexture: 0.35, seed: 1907, margin: 0.07, marks: true },
+  paper: { color: '#f4efe4', grain: 0.35, inkTexture: 0.2, seed: 1907, margin: 0.07, marks: true },
 }
 
 export function newId(): string {

@@ -108,7 +108,11 @@ function centralMean(a: Float32Array, layout: SheetLayout) {
   const y1 = Math.round((image.y + image.h * 0.75) * scale)
   let s = 0
   let n = 0
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) (s += a[y * width + x]!), n++
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) {
+      s += a[y * width + x]!
+      n++
+    }
   return s / n
 }
 

@@ -230,6 +230,8 @@ export interface RenderRequest {
   layout: SheetLayout
   rowStart: number
   rowEnd: number
+  /** first sheet row stored in the output buffer (default 0 = full-sheet buffer) */
+  outRowStart?: number
 }
 
 const NO_REGISTRATION: Registration = { dx: 0, dy: 0, rotate: 0 }
@@ -242,8 +244,9 @@ export function renderRows(input: RenderInput, req: RenderRequest, rgba: Uint8Cl
   const { settings, mode, layout, rowStart, rowEnd } = req
   const { width, scale } = layout
   const { maps } = input
+  const base = (req.outRowStart ?? 0) * width
 
-  if (mode === 'source') return renderSource(input, layout, settings.paper.color, rowStart, rowEnd, rgba)
+  if (mode === 'source') return renderSource(input, layout, settings.paper.color, rowStart, rowEnd, rgba, base)
 
   const film = mode === 'film1' || mode === 'film2'
   const want = [
@@ -275,7 +278,7 @@ export function renderRows(input: RenderInput, req: RenderRequest, rgba: Uint8Cl
     for (let py = rowStart; py < rowEnd; py++) {
       for (let px = 0; px < width; px++) {
         const v = Math.round((1 - a[(py - rowStart) * width + px]!) * 255)
-        const o = (py * width + px) * 4
+        const o = (py * width + px - base) * 4
         rgba[o] = rgba[o + 1] = rgba[o + 2] = v
         rgba[o + 3] = 255
       }
@@ -293,7 +296,7 @@ export function renderRows(input: RenderInput, req: RenderRequest, rgba: Uint8Cl
     const sy = (py + 0.5) / scale
     for (let px = 0; px < width; px++) {
       const sx = (px + 0.5) / scale
-      const i = py * width + px
+      const i = py * width + px - base
       const j = (py - rowStart) * width + px
       let r = paper[0]
       let g = paper[1]
@@ -327,7 +330,7 @@ export function renderRows(input: RenderInput, req: RenderRequest, rgba: Uint8Cl
   }
 }
 
-function renderSource(input: RenderInput, layout: SheetLayout, paperHex: string, rowStart: number, rowEnd: number, rgba: Uint8ClampedArray) {
+function renderSource(input: RenderInput, layout: SheetLayout, paperHex: string, rowStart: number, rowEnd: number, rgba: Uint8ClampedArray, base: number) {
   const { width, scale, image } = layout
   const { maps, source } = input
   const paper = hexToLinear(paperHex).map(linearToSrgb8)
@@ -335,7 +338,7 @@ function renderSource(input: RenderInput, layout: SheetLayout, paperHex: string,
     for (let px = 0; px < width; px++) {
       const u = ((px + 0.5) / scale - image.x) / image.w
       const v = ((py + 0.5) / scale - image.y) / image.h
-      const o = (py * width + px) * 4
+      const o = (py * width + px - base) * 4
       if (u < 0 || v < 0 || u >= 1 || v >= 1) {
         rgba[o] = paper[0]!
         rgba[o + 1] = paper[1]!
