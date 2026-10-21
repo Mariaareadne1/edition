@@ -41,6 +41,8 @@ function reducer(h: History<EditionDocument>, a: Action): History<EditionDocumen
   }
 }
 
+const PACKAGE_ENTRY_LIMIT = 64 * 1024 * 1024
+
 export const SAMPLE_SIZE = analysisSize(1440, 1440 / SAMPLE_ASPECT)
 
 export type SourceState =
@@ -55,22 +57,40 @@ const samplePayload = (): SourcePayload => ({ kind: 'sample', ...SAMPLE_SIZE })
 export function useEdition() {
   const [history, dispatch] = useReducer(reducer, undefined, () => createHistory(createDocument()))
   const doc = history.present
+  const historyRef = useRef(history)
+  historyRef.current = history
   const [source, setSource] = useState<SourceState>({ status: 'loading', message: 'Opening your last print…' })
   const [notice, setNotice] = useState<string | null>(null)
   const [save, setSave] = useState<SaveState>({ kind: 'idle' })
   const [booted, setBooted] = useState(false)
   const loadedDoc = useRef<EditionDocument | null>(null)
+  /**
+   * Image blobs this session has replaced and may delete once the document
+   * that superseded them is safely saved. Nothing else is ever deleted, so a
+   * failed read at boot can never lead to the saved image being pruned.
+   */
+  const retiredBlobs = useRef<Set<string>>(new Set())
+  const latestSettings = useRef(doc.settings)
+  latestSettings.current = doc.settings
 
   // ── boot: restore the last document and its image ──────────────────────
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       let restored: EditionDocument | null = null
+      let raw: unknown
       try {
-        const raw = await storage.getDoc()
+        raw = await storage.getDoc()
         if (raw !== undefined) restored = parseDocument(raw)
       } catch (err) {
-        setNotice(err instanceof SchemaError ? `Your saved print couldn’t be read (${err.message}); starting from the sample.` : 'Browser storage is unavailable; work will not be saved.')
+        if (err instanceof SchemaError && raw !== undefined) {
+          // Keep the unreadable record before anything can overwrite it.
+          const key = `unreadable-${Date.now()}`
+          await storage.putDocAs(key, raw).catch(() => undefined)
+          setNotice(`Your saved print couldn’t be read (${err.message}). A copy was kept in this browser’s storage as “${key}”; starting from the sample.`)
+        } else {
+          setNotice('Browser storage is unavailable; work will not be saved.')
+        }
       }
       if (cancelled) return
       if (restored?.source.kind === 'image') {
@@ -105,7 +125,10 @@ export function useEdition() {
     const t = window.setTimeout(async () => {
       try {
         await storage.putDoc(doc)
-        await storage.pruneBlobs(doc.source.kind === 'image' ? doc.source.blobId : null)
+        const keep = doc.source.kind === 'image' ? doc.source.blobId : null
+        const retired = [...retiredBlobs.current].filter((id) => id !== keep)
+        for (const id of retired) retiredBlobs.current.delete(id)
+        await storage.deleteBlobs(retired)
         setSave({ kind: 'saved', at: Date.now() })
       } catch (err) {
         setSave({ kind: 'error', message: err instanceof Error ? err.message : 'Could not save.' })
@@ -113,6 +136,21 @@ export function useEdition() {
     }, 400)
     return () => window.clearTimeout(t)
   }, [doc, booted, gestureOpen])
+
+  // Flush when the page is hidden so an edit inside the autosave delay survives a close.
+  useEffect(() => {
+    if (!booted) return
+    const flush = () => {
+      if (doc !== loadedDoc.current) void storage.putDoc(doc).catch(() => undefined)
+    }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [doc, booted])
+
+  const retireCurrentImage = useCallback(() => {
+    const cur = historyRef.current.present.source
+    if (cur.kind === 'image') retiredBlobs.current.add(cur.blobId)
+  }, [])
 
   // ── actions ─────────────────────────────────────────────────────────────
   const previewSettings = useCallback((settings: PrintSettings) => dispatch({ type: 'preview', settings }), [])
@@ -129,17 +167,20 @@ export function useEdition() {
       setNotice('The image is open but could not be saved in this browser; it won’t survive a reload.')
     }
     const docName = name.replace(/\.[a-z0-9]+$/i, '') || 'Untitled print'
+    retireCurrentImage()
     setSource({ status: 'ready', payload: { kind: 'pixels', ...decoded.pixels }, blob: file, label: name })
+    // Read settings at completion time, so edits made while decoding are kept.
     dispatch({
       type: 'load',
-      doc: { ...createDocument({ kind: 'image', blobId, name, width: decoded.width, height: decoded.height, type: decoded.type }, docName), settings: history.present.settings },
+      doc: { ...createDocument({ kind: 'image', blobId, name, width: decoded.width, height: decoded.height, type: decoded.type }, docName), settings: latestSettings.current },
     })
-  }, [history.present.settings])
+  }, [retireCurrentImage])
 
   const useSample = useCallback(() => {
+    retireCurrentImage()
     setSource({ status: 'ready', payload: samplePayload(), blob: null, label: 'Harbour, dusk (sample)' })
-    dispatch({ type: 'load', doc: { ...createDocument(), settings: history.present.settings } })
-  }, [history.present.settings])
+    dispatch({ type: 'load', doc: { ...createDocument(), settings: latestSettings.current } })
+  }, [retireCurrentImage])
 
   /** Settings only, as readable JSON — never claims to contain the image. */
   const exportSettings = useCallback((): { name: string; data: Uint8Array } => {
@@ -166,11 +207,20 @@ export function useEdition() {
       return 'Settings applied to the current image. (A .json file holds settings only — no image.)'
     }
     let entries: Record<string, Uint8Array>
+    let tooLarge = false
     try {
-      entries = unzipSync(bytes)
+      // Only the two expected entries, each size-checked before inflating (no zip bombs).
+      entries = unzipSync(bytes, {
+        filter: (f) => {
+          if (f.name !== 'document.json' && !/^source\.(jpeg|png|webp)$/.test(f.name)) return false
+          if (f.originalSize > PACKAGE_ENTRY_LIMIT) tooLarge = true
+          return f.originalSize <= PACKAGE_ENTRY_LIMIT
+        },
+      })
     } catch {
       throw new ImportError('That file is not an Edition package or settings file.')
     }
+    if (tooLarge) throw new ImportError('An entry in that package is larger than Edition accepts.')
     const docEntry = entries['document.json']
     if (!docEntry) throw new ImportError('The package has no document.json.')
     const parsed = parseDocument(JSON.parse(strFromU8(docEntry)))
@@ -182,12 +232,13 @@ export function useEdition() {
       dispatch({ type: 'rename', name: parsed.name })
       return `Opened “${parsed.name}” with its image.`
     }
+    retireCurrentImage()
     setSource({ status: 'ready', payload: samplePayload(), blob: null, label: 'Harbour, dusk (sample)' })
     dispatch({ type: 'load', doc: { ...parsed, id: newId(), source: { kind: 'sample', id: 'harbour' } } })
     return parsed.source.kind === 'image'
       ? `Opened “${parsed.name}”. The package had no image, so it is shown on the sample.`
       : `Opened “${parsed.name}”.`
-  }, [importImage])
+  }, [importImage, retireCurrentImage])
 
   const actions = useMemo(
     () => ({

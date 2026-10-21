@@ -33,7 +33,7 @@ function withRegistration(s: PrintSettings, k: 0 | 1, reg: Registration): PrintS
   return { ...s, registration }
 }
 
-export function PrintCanvas({ pool, source, settings, view, zoom, activePlate, onPreview, onPush, onCommit, onStatus }: PrintCanvasProps) {
+export function PrintCanvas({ pool, source, settings, view, zoom, activePlate, onPreview, onCommit, onStatus }: PrintCanvasProps) {
   const desk = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const sourceCanvas = useRef<HTMLCanvasElement>(null)
@@ -146,8 +146,13 @@ export function PrintCanvas({ pool, source, settings, view, zoom, activePlate, o
           const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key]
           if (!delta) return
           e.preventDefault()
-          onPush(withRegistration(settings, activePlate, { ...reg, dx: clampOffset(reg.dx + delta[0]!), dy: clampOffset(reg.dy + delta[1]!) }))
+          // Preview while the key is held; commit on keyup — one undo step per press-and-hold.
+          onPreview(withRegistration(settings, activePlate, { ...reg, dx: clampOffset(reg.dx + delta[0]!), dy: clampOffset(reg.dy + delta[1]!) }))
         }}
+        onKeyUp={(e) => {
+          if (e.key.startsWith('Arrow')) onCommit()
+        }}
+        onBlur={onCommit}
       >
         <canvas ref={canvas} className="sheet__canvas" data-testid="proof" />
         {view === 'compare' && (
@@ -160,6 +165,9 @@ export function PrintCanvas({ pool, source, settings, view, zoom, activePlate, o
           </>
         )}
       </div>
+      <p className="visually-hidden" aria-live="polite">
+        Ink {activePlate + 1} offset {reg.dx.toFixed(2)} by {reg.dy.toFixed(2)} millimetres
+      </p>
       {view === 'compare' && (
         <label className="compare-slider">
           <span className="visually-hidden">Comparison position</span>

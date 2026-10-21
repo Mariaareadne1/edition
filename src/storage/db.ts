@@ -20,7 +20,14 @@ function open(): Promise<IDBDatabase> {
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null
-const db = () => (dbPromise ??= open())
+const db = () => {
+  // A failed open is not cached: the next call tries again.
+  dbPromise ??= open().catch((err) => {
+    dbPromise = null
+    throw err
+  })
+  return dbPromise
+}
 
 function run<T>(store: 'docs' | 'blobs', mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return db().then(
@@ -40,6 +47,7 @@ export const CURRENT_KEY = 'current'
 export const storage = {
   getDoc: () => run<unknown>('docs', 'readonly', (s) => s.get(CURRENT_KEY)),
   putDoc: (doc: unknown) => run('docs', 'readwrite', (s) => s.put(doc, CURRENT_KEY)),
+  putDocAs: (key: string, doc: unknown) => run('docs', 'readwrite', (s) => s.put(doc, key)),
   // Stored as ArrayBuffer + type: WebKit cannot store Blobs in IndexedDB in
   // private/ephemeral sessions, but ArrayBuffers work everywhere.
   getBlob: async (id: string): Promise<Blob | undefined> => {
@@ -50,9 +58,8 @@ export const storage = {
     const bytes = await blob.arrayBuffer()
     await run('blobs', 'readwrite', (s) => s.put({ type: blob.type, bytes }, id))
   },
-  /** Remove every stored blob except `keep` (images that are no longer referenced). */
-  pruneBlobs: async (keep: string | null) => {
-    const keys = await run<IDBValidKey[]>('blobs', 'readonly', (s) => s.getAllKeys())
-    await Promise.all(keys.filter((k) => k !== keep).map((k) => run('blobs', 'readwrite', (s) => s.delete(k))))
+  /** Delete specific image records (only ones this session explicitly replaced). */
+  deleteBlobs: async (ids: string[]) => {
+    await Promise.all(ids.map((id) => run('blobs', 'readwrite', (s) => s.delete(id))))
   },
 }

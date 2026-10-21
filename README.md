@@ -41,15 +41,15 @@ Colour management: images are decoded by the browser into sRGB (wide-gamut sourc
 | Check | Command | Result (2026-10-21) |
 | --- | --- | --- |
 | Types (strict) · lint · build | `pnpm typecheck` · `pnpm lint` · `pnpm build` | pass |
-| Engine unit tests | `pnpm test` | 20 / 20 |
-| Browser journeys — Chromium **and** WebKit | `pnpm test:e2e` | 10 / 10 per engine |
+| Engine + import unit tests | `pnpm test` | 25 / 25 |
+| Browser journeys — Chromium **and** WebKit | `pnpm test:e2e` | 13 / 13 per engine |
 
 What the tests establish:
 - **Separation:** white needs no ink; black needs full key; key coverage is monotonic along a grey ramp; coverage stays in [0, 1]; the accent plate takes coral and red but not green or blue; transparent pixels on cream paper print nothing; deterministic.
 - **Screen:** dot area round-trips its inverse; a uniform plate inks the requested fraction (0–100 %) within 2 %, and within 3 % at 2.5 px cells; a plate offset of (10, −4) px moves the pattern by exactly that; angle changes the pattern but not the coverage.
 - **Export parity:** the A4/300 dpi composite, parsed from the downloaded PNG, matches the on-screen proof when both are averaged over the same sheet regions in linear light — mean **0.15/255** (worst block 0.97) against a 542 px proof in Chromium; mean 0.37/255 (worst 2.96) against a 1083 px proof in WebKit.
 - **Export reflects the controls:** shifting ink 2 changes the composite PNG but not the ink-2 film (films are registered); changing ink 2's screen angle changes its film.
-- **Journeys:** drag moves the plate by the expected millimetres and undoes in one step; keyboard nudges; invalid numbers rejected; a valid photo imports and reloads to a byte-identical proof; a text file named `.png` is refused; a 17.5 MP image imports without crashing; a burst of rapid slider changes ends on a proof identical to a fresh render of the final settings; no horizontal overflow at 390 px.
+- **Journeys:** drag moves the plate by the expected millimetres and undoes in one step; keyboard nudges; invalid numbers rejected; a valid photo imports and reloads to a byte-identical proof; a text file named `.png` is refused; an image whose header declares 400 MP is refused before decoding; a 17.5 MP image imports without crashing; a saved print that can't be read (e.g. from a newer Edition) is copied aside and its image is never deleted; holding an arrow key is one undo step; a burst of rapid slider changes ends on a proof identical to a fresh render of the final settings; no horizontal overflow at 390 px.
 
 **Not verified:** Firefox; real phones (touch is emulated); 100 MP inputs (the limit is enforced but only a 17.5 MP file is exercised); colour accuracy against physical inks (not claimed).
 

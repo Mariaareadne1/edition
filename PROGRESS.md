@@ -13,7 +13,15 @@
 - [x] E5 visual pass, responsive, a11y basics, docs, screenshots, Pages deploy
 
 ## Test results (2026-10-21)
-`pnpm test` 20/20 · `pnpm test:e2e` 10/10 Chromium + 10/10 WebKit · typecheck, lint, build pass.
+`pnpm test` 25/25 · `pnpm test:e2e` 13/13 Chromium + 13/13 WebKit · typecheck, lint, build pass.
+
+## Independent review (2026-10-21) — fixed
+Boot read failure could let autosave overwrite the saved print and prune its image → unreadable record is
+copied aside and only blobs this session replaced are ever deleted; worker crashes hung the pool → crashed
+workers are replaced and the render retried; compare view's source render could drop the print render →
+separate latest-wins lanes; zip-bomb in .edition import → per-entry size filter; pixel limit checked after
+decode → header dimensions checked first (PNG/JPEG/WebP); stale settings captured during import; no flush
+on pagehide; arrow-key repeats flooded undo; cancel shown as an error; failed IndexedDB open cached.
 
 ## Known gaps
 - Firefox and real phones untested; only a 17.5 MP import exercised.

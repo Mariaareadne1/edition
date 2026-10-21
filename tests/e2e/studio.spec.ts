@@ -219,3 +219,68 @@ test('phone layout keeps the print first and controls reachable', async ({ brows
   await expect(page.getByRole('textbox', { name: 'Ruling' })).toBeVisible()
   await ctx.close()
 })
+
+test('an oversized image is refused from its header, before decoding', async ({ page }) => {
+  await freshStudio(page)
+  // A real PNG signature + IHDR declaring 20000 × 20000, with no pixel data.
+  const head = Buffer.alloc(33)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]).copy(head, 0)
+  head.writeUInt32BE(20000, 16)
+  head.writeUInt32BE(20000, 20)
+  const path = join(TMP, 'huge.png')
+  writeFileSync(path, head)
+  await page.getByTestId('image-input').setInputFiles(path)
+  await expect(page.getByRole('alert')).toContainText('400 megapixels')
+})
+
+test('an unreadable saved print is preserved, not overwritten or pruned', async ({ page }) => {
+  await freshStudio(page)
+  await page.getByTestId('image-input').setInputFiles(writeTestPhoto('keep-me.png'))
+  await expect(page.getByTestId('proof-status')).toContainText('keep-me.png', { timeout: 30_000 })
+  await expect(page.getByTestId('proof-status')).toContainText('Saved')
+  // Simulate a document written by a newer Edition.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const req = indexedDB.open('edition')
+    req.onsuccess = () => {
+      const db = req.result
+      const tx = db.transaction('docs', 'readwrite')
+      const store = tx.objectStore('docs')
+      const get = store.get('current')
+      get.onsuccess = () => store.put({ ...get.result, version: 99 }, 'current')
+      tx.oncomplete = () => { db.close(); resolve() }
+      tx.onerror = () => reject(tx.error)
+    }
+  }))
+  await page.reload()
+  await waitForProof(page)
+  await expect(page.getByRole('alert')).toContainText('A copy was kept')
+  // Make an edit so autosave runs, then confirm both the copy and the image bytes survive.
+  await page.getByRole('textbox', { name: 'Ruling' }).fill('120')
+  await page.getByRole('textbox', { name: 'Ruling' }).press('Enter')
+  await expect(page.getByTestId('proof-status')).toContainText('Saved')
+  const kept = await page.evaluate(() => new Promise<{ docs: string[]; blobs: number }>((resolve) => {
+    const req = indexedDB.open('edition')
+    req.onsuccess = () => {
+      const db = req.result
+      const tx = db.transaction(['docs', 'blobs'])
+      const d = tx.objectStore('docs').getAllKeys()
+      const b = tx.objectStore('blobs').getAllKeys()
+      tx.oncomplete = () => { resolve({ docs: d.result.map(String), blobs: b.result.length }); db.close() }
+    }
+  }))
+  expect(kept.docs.some((k) => k.startsWith('unreadable-'))).toBe(true)
+  expect(kept.blobs).toBe(1)
+})
+
+test('holding an arrow key is one undo step', async ({ page }) => {
+  await freshStudio(page)
+  const shiftX = page.getByRole('textbox', { name: 'Shift X' })
+  const before = await shiftX.inputValue()
+  await page.getByTestId('sheet').focus()
+  await page.keyboard.down('ArrowRight')
+  for (let i = 0; i < 5; i++) await page.keyboard.down('ArrowRight') // auto-repeat
+  await page.keyboard.up('ArrowRight')
+  await expect(shiftX).not.toHaveValue(before)
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(shiftX).toHaveValue(before)
+})

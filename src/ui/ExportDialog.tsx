@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { zipSync } from 'fflate'
 import { sheetLayout } from '../engine/render'
 import type { PrintSettings } from '../engine/types'
-import { runExport, type ExportJob } from '../worker/pool'
+import { ExportCancelled, runExport, type ExportJob } from '../worker/pool'
 import type { ExportOutput, SourcePayload } from '../worker/protocol'
 import { download } from './download'
 
@@ -42,6 +42,7 @@ export function ExportDialog({ source, settings, baseName, onPackage, onSettings
   const [progress, setProgress] = useState<{ done: number; total: number; stage: string } | null>(null)
   const [results, setResults] = useState<Result[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const job = useRef<ExportJob | null>(null)
 
   useEffect(() => {
@@ -57,13 +58,15 @@ export function ExportDialog({ source, settings, baseName, onPackage, onSettings
 
   const start = async () => {
     setError(null)
+    setInfo(null)
     setResults([])
     setProgress({ done: 0, total: 1, stage: 'starting' })
     job.current = runExport(source, settings, chosen.longEdge, selected, (done, total, stage) => setProgress({ done, total, stage }))
     try {
       setResults(await job.current.promise)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed.')
+      if (err instanceof ExportCancelled) setInfo('Export cancelled; nothing was written.')
+      else setError(err instanceof Error ? err.message : 'Export failed.')
     } finally {
       setProgress(null)
       job.current = null
@@ -120,6 +123,7 @@ export function ExportDialog({ source, settings, baseName, onPackage, onSettings
         )}
       </div>
       {error && <p className="export__error" role="alert">{error}</p>}
+      {info && <p className="export__info" role="status">{info}</p>}
 
       {results.length > 0 && (
         <ul className="export__results" aria-label="Rendered files">
