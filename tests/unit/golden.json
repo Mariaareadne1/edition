@@ -1,0 +1,72 @@
+{
+  "gray-ramp": {
+    "width": 600,
+    "height": 428,
+    "hashes": {
+      "print": "387c59f0",
+      "film1": "edaacaf6",
+      "film2": "c87f5d85",
+      "source": "25341a85"
+    },
+    "coverage": [
+      0.2819,
+      0.0011
+    ]
+  },
+  "swatches": {
+    "width": 600,
+    "height": 428,
+    "hashes": {
+      "print": "84046552",
+      "film1": "66503d9b",
+      "film2": "c56b37d4",
+      "source": "65348b65"
+    },
+    "coverage": [
+      0.2739,
+      0.1162
+    ]
+  },
+  "diagonal-edges": {
+    "width": 600,
+    "height": 600,
+    "hashes": {
+      "print": "0e22e1fd",
+      "film1": "b7c76d54",
+      "film2": "0de0d105",
+      "source": "93d69095"
+    },
+    "coverage": [
+      0.3709,
+      0.0008
+    ]
+  },
+  "transparent-disc": {
+    "width": 514,
+    "height": 600,
+    "hashes": {
+      "print": "952eccb3",
+      "film1": "6b31403d",
+      "film2": "46730582",
+      "source": "1d7d5d29"
+    },
+    "coverage": [
+      0.0052,
+      0.1234
+    ]
+  },
+  "detailed-scene": {
+    "width": 497,
+    "height": 600,
+    "hashes": {
+      "print": "6042dab4",
+      "film1": "62d12993",
+      "film2": "f1ed875e",
+      "source": "827a43f0"
+    },
+    "coverage": [
+      0.2731,
+      0.1776
+    ]
+  }
+}
