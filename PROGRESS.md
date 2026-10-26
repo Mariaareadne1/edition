@@ -33,7 +33,9 @@ D7–D10 in `DECISIONS.md`.
       review: no CRITICAL/HIGH; MEDIUM/LOW findings fixed (drag bound to the plate picked up, pointer
       cancel reverts, held-S cleared on blur, phone tray modal + single history pop + focus return,
       menu roles, live-region chatter, Alt/⌘+arrow passthrough, snap cue, IndexedDB reopen).
-- [ ] **Publish** — merge to `main` (fast-forward), Pages deploy, verify the live site.
+- [x] **Publish** (2026-10-26) — `main` fast-forwarded to 7aaf908; workflow run 40276875840 green
+      (build, e2e, deploy). Live site checked in Chromium and WebKit at 1440×900 and 390×844: Print Room
+      UI, sample proofs, no console errors, no requests to any other host.
 
 ## Known gaps
 - Closing and immediately reopening the phone tray can race the asynchronous `history.back()` of the
