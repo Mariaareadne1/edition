@@ -87,6 +87,14 @@ ctx.onmessage = async (e: MessageEvent<ToWorker>) => {
       const pixels = new Uint8ClampedArray(layout.width * rows * 4)
       const scratch = createScratch(layout.width, rows)
       renderRows({ maps: m, source: source.rgba }, { settings: msg.settings, mode: msg.mode, layout, rowStart: msg.rowStart, rowEnd, outRowStart: msg.rowStart }, pixels, scratch)
+      if (msg.colStart !== undefined && msg.colEnd !== undefined) {
+        const c0 = Math.max(0, Math.min(layout.width, msg.colStart))
+        const c1 = Math.max(c0, Math.min(layout.width, msg.colEnd))
+        const cropped = new Uint8ClampedArray((c1 - c0) * rows * 4)
+        for (let y = 0; y < rows; y++) cropped.set(pixels.subarray((y * layout.width + c0) * 4, (y * layout.width + c1) * 4), y * (c1 - c0) * 4)
+        post({ type: 'rows', id: msg.id, rowStart: msg.rowStart, rowEnd, width: layout.width, height: layout.height, pixels: cropped, ms: performance.now() - t, colStart: c0, colEnd: c1 }, [cropped.buffer])
+        return
+      }
       post({ type: 'rows', id: msg.id, rowStart: msg.rowStart, rowEnd, width: layout.width, height: layout.height, pixels, ms: performance.now() - t }, [pixels.buffer])
       return
     }

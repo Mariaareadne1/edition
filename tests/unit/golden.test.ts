@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { separate } from '../../src/engine/separations'
 import { renderSheet, sheetLayout, type RenderMode } from '../../src/engine/render'
-import { DEFAULT_SETTINGS } from '../../src/state/document'
+import type { PrintSettings } from '../../src/engine/types'
 import { detailedScene, diagonalEdges, grayRamp, swatches, transparentDisc } from './fixtures'
 
 const FIXTURES = {
@@ -19,6 +19,18 @@ const FIXTURES = {
   'transparent-disc': { w: 200, h: 240, paint: transparentDisc },
   'detailed-scene': { w: 320, h: 400, paint: detailedScene },
 } as const
+
+/** The pre-redesign defaults, frozen here so the test guards the engine, not the default palette. */
+const SETTINGS: PrintSettings = {
+  inks: [
+    { name: 'Deep cobalt', color: '#1f3a93', opacity: 0.96, enabled: true },
+    { name: 'Warm coral', color: '#f4664a', opacity: 0.92, enabled: true },
+  ],
+  separation: { contrast: 1.35, density: 0.04, accent: 1.3, balance: 0.7 },
+  screen: { ruling: 150, angles: [15, 75] },
+  registration: [{ dx: 0, dy: 0, rotate: 0 }, { dx: 0.6, dy: -0.4, rotate: 0.3 }],
+  paper: { color: '#f4efe4', grain: 0.35, inkTexture: 0.2, seed: 1907, margin: 0.07, marks: true },
+}
 
 const MODES: RenderMode[] = ['print', 'film1', 'film2', 'source']
 const LONG_EDGE = 600
@@ -41,7 +53,7 @@ function renderAll() {
   const out: Record<string, { width: number; height: number; hashes: Record<string, string>; coverage: [number, number] }> = {}
   for (const [name, f] of Object.entries(FIXTURES)) {
     const src = f.paint(f.w, f.h)
-    const s = DEFAULT_SETTINGS
+    const s = SETTINGS
     const maps = separate(src, f.w, f.h, s.paper.color, s.inks, s.separation)
     const layout = sheetLayout(f.w, f.h, LONG_EDGE, s.paper.margin)
     const hashes: Record<string, string> = {}

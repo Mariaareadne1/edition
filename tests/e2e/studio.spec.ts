@@ -20,14 +20,14 @@ test('views: each ink alone, source and compare are distinct real renders', asyn
   await freshStudio(page)
   const print = await proofStats(page)
   const hashes = new Set([print.hash])
-  for (const view of ['Ink 1', 'Ink 2', 'Source']) {
+  for (const view of ['Plate 1', 'Plate 2', 'Source']) {
     await page.getByRole('button', { name: view, exact: true }).click()
     await settledProof(page)
     hashes.add((await proofStats(page)).hash)
   }
   expect(hashes.size).toBe(4)
-  await page.getByRole('button', { name: 'Compare', exact: true }).click()
-  await expect(page.getByLabel('Comparison position')).toBeVisible()
+  await page.getByRole('button', { name: 'Split', exact: true }).click()
+  await expect(page.getByRole('slider', { name: 'Comparison position' })).toBeVisible()
 })
 
 test('dragging the print moves the active plate by millimetres, as one undo step', async ({ page }) => {
@@ -102,6 +102,7 @@ test('a large photograph (17.5 MP) is downscaled for analysis without crashing',
 
 test('rapid changes never leave a stale proof', async ({ page }) => {
   await freshStudio(page)
+  await page.getByRole('button', { name: /Workshop drawer/ }).click()
   const slider = page.getByRole('slider', { name: 'Contrast slider' })
   const b = (await slider.boundingBox())!
   await page.mouse.move(b.x + 4, b.y + b.height / 2)
@@ -210,11 +211,15 @@ test('phone layout keeps the print first and controls reachable', async ({ brows
   const page = await ctx.newPage()
   await page.goto('/')
   await waitForProof(page)
+  // The print leads: nearly the full width of the phone.
   const sheet = (await page.getByTestId('sheet').boundingBox())!
+  expect(sheet.width).toBeGreaterThan(390 * 0.85)
   expect(sheet.x).toBeGreaterThanOrEqual(0)
   expect(sheet.x + sheet.width).toBeLessThanOrEqual(390)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow).toBeLessThanOrEqual(0)
+  await expect(page.getByRole('textbox', { name: 'Ruling' })).toBeHidden()
+  await page.getByRole('button', { name: 'Adjust' }).click()
   await page.getByRole('textbox', { name: 'Ruling' }).scrollIntoViewIfNeeded()
   await expect(page.getByRole('textbox', { name: 'Ruling' })).toBeVisible()
   await ctx.close()

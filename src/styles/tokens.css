@@ -1,0 +1,37 @@
+/*
+ * Print room tokens. Two surfaces: the press table (deep, warm, neutral) and
+ * paper stock (the tray, dialogs, the sheet itself). Ink colours come from the
+ * print's own settings (--ink-1, --ink-2, --paper-stock on .app), never from a
+ * global theme.
+ */
+:root {
+  --table: #221e1a;
+  --table-lit: #322c26;
+  --table-deep: #1a1714;
+  --table-line: rgba(239, 231, 216, 0.11);
+  --table-line-strong: rgba(239, 231, 216, 0.24);
+  --chalk: #efe7d8;
+  --chalk-2: rgba(239, 231, 216, 0.78);
+  --chalk-3: rgba(239, 231, 216, 0.6); /* ≥ 4.5:1 on --table */
+
+  --stock: #efe7d8;
+  --stock-2: #e6dccb;
+  --stock-3: #d9cdb8;
+  --ink: #1d1814;
+  --ink-2: #463e36;
+  --ink-3: #665d53; /* ≥ 4.5:1 on --stock */
+  --rule: rgba(29, 24, 20, 0.15);
+  --rule-strong: rgba(29, 24, 20, 0.3);
+
+  --signal: #e2401f;      /* vermilion, for marks and rules on the table */
+  --signal-text: #b2301a; /* vermilion text on stock, ≥ 4.5:1 */
+
+  --serif: 'Libre Caslon Text', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Archivo', system-ui, -apple-system, sans-serif;
+  --mono: 'DM Mono', ui-monospace, Menlo, monospace;
+
+  --press: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --snap: cubic-bezier(0.3, 1.6, 0.5, 1);
+  --rail-h: 0px;
+  color-scheme: dark;
+}

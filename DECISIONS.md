@@ -32,3 +32,32 @@ as ArrayBuffer + type because WebKit cannot store Blobs in IndexedDB in ephemera
 ## D6 — Films are registered
 `ink-1.png` / `ink-2.png` are what you would expose a plate or screen from, so they ignore the on-press
 misregistration, which only appears in the composite. Tested both ways.
+
+## D7 — Print Room layout: the Press Table, not a drawer (redesign E1, 2026-10-25)
+Two arrangements were built with the real, wired controls and compared at 1440×900 and 390×844
+(`docs/redesign/e1-*.jpg`). **A — Press Table**: title and view index set in the table's left margin, the
+sheet centred with its plate tabs on its right edge, one card of stock (the ink tray) on the right.
+**B — Collapsible Ink Drawer**: the same, with the tray hidden behind an *Adjust* button. The sheet is
+height-bound, so B did not make the print any larger (614 × 742 px in both); it only hid the plate
+controls one click away, and when open it covered the plate tabs and part of the print. A was chosen: same
+art dominance, every essential control visible, no occlusion, two objects on the table instead of three
+permanent panels. B's pattern survives where it earns its place — on phones the tray is a bottom sheet.
+
+## D8 — Editor and presentation state live outside the document
+`state/useStudio.ts` holds the view, the plate in hand, the loupe, the lifted plates, the tray/drawer and
+the onboarding hint. None of it enters `EditionDocument`, the undo history or an export, so changing
+tools can never create an undo step and the print's pixels depend only on `PrintSettings`. Plate offsets
+have exactly one home (`settings.registration`): the drag, the arrow keys, the numeric fields, the plate
+tabs' readout and the register pad all read and write it.
+
+## D9 — A real loupe: the export's own pixels
+The loupe asks the worker pool (its own latest-wins lane) for the rows under the pointer at the A4/300 dpi
+export size, cropped to the glass in the worker, and draws them with smoothing off at 1 or 2 device pixels
+per exported pixel. It is the same `renderRows` call as the export, not a zoomed preview or a texture.
+The engine is unchanged; rows are rendered full-width and cropped (≈0.1–0.2 s per move at 1:1).
+
+## D10 — Default working pair: Cobalt × Vermilion on museum stock
+New documents start on a fourth recipe, *Cobalt & Vermilion* (`#1b3fbf`, `#f23b1d`) on `#efe7d8` paper.
+The three original recipes, paper tones and custom colours are unchanged, and saved documents keep their
+own inks. The golden-output test freezes the pre-redesign settings so it keeps guarding the engine rather
+than the default palette.

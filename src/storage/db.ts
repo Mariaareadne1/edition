@@ -13,7 +13,15 @@ function open(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs')
       if (!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs')
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const d = req.result
+      // Another tab (or a reset) wants to upgrade or delete the database: let it, and reopen on next use.
+      d.onversionchange = () => {
+        d.close()
+        dbPromise = null
+      }
+      resolve(d)
+    }
     req.onerror = () => reject(req.error ?? new Error('IndexedDB is unavailable'))
     req.onblocked = () => reject(new Error('IndexedDB is blocked by another tab'))
   })
