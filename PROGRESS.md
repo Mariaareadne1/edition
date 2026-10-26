@@ -26,10 +26,20 @@ D7–D10 in `DECISIONS.md`.
 - [x] **E4 workflows** — ink tray (plate ink/on-off, angle, density, register pad + fields, ruling,
       recipes) and workshop drawer (separation, paper); phone bottom sheet with Back/Escape; Save in the
       masthead; export dialog restyled with the same logic.
-- [ ] **E5 QA + publish** — full suites both engines, pixel checks on downloaded files, screenshots,
-      docs, merge to `main`, verify Pages.
+- [x] **E5 QA** (2026-10-26) — typecheck · lint · build pass; `pnpm test` 29/29; `pnpm test:e2e` 24/24
+      Chromium + 23/23 WebKit (1 Chromium-only touch test skipped in WebKit); export parity 0.09/255
+      Chromium, 0.29/255 WebKit; loupe = export, 0 differing pixels; five fixtures exported at A4/300 dpi
+      and inspected with Pillow (sizes, films, plate offsets from the marks) — all pass. Independent code
+      review: no CRITICAL/HIGH; MEDIUM/LOW findings fixed (drag bound to the plate picked up, pointer
+      cancel reverts, held-S cleared on blur, phone tray modal + single history pop + focus return,
+      menu roles, live-region chatter, Alt/⌘+arrow passthrough, snap cue, IndexedDB reopen).
+- [ ] **Publish** — merge to `main` (fast-forward), Pages deploy, verify the live site.
 
 ## Known gaps
+- Closing and immediately reopening the phone tray can race the asynchronous `history.back()` of the
+  previous close and close the new tray (low; reopen works).
+- e2e timing is sensitive to machine load: with other projects' suites running (load average 40+),
+  Chromium workers were starved and a proof could wait indefinitely — now bounded by a 30 s watchdog.
 - Firefox and real phones untested (touch is driven through Chromium's DevTools protocol).
 - The loupe renders full sheet rows and crops them (~0.1–0.2 s per move at 1:1); fine on a laptop,
   slower on low-end phones.

@@ -65,12 +65,13 @@
   .tool-button--icon { width: 40px; }
   .pull-button { height: 40px; padding: 0 14px; }
 
-  .table { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .table { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
   .margin { display: contents; }
-  .title { padding: 8px 16px 0; gap: 0; }
+  .title { grid-row: 1; padding: 8px 16px 0; gap: 0; }
+  .stage { grid-row: 3; }
   .title__eyebrow { display: none; }
   .title__name { font-size: 22px; padding-bottom: 2px; }
-  .hint { position: absolute; z-index: 5; left: 16px; right: 16px; bottom: 6px; margin: 0; font-size: 12.5px; justify-content: center; }
+  .hint { grid-row: 2; margin: 0; padding: 0 8px 0 16px; font-size: 13px; align-items: center; }
   .hint__close { width: 32px; height: 32px; }
 
   .rail {

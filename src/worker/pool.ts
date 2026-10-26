@@ -53,7 +53,7 @@ class WorkerCrashed extends Error {}
  * this long is treated as crashed (replaced, render retried once) so the proof
  * can never wait forever — e.g. when the OS starves or wedges a worker.
  */
-const STALL_MS = 20_000
+const STALL_MS = 30_000
 
 /**
  * Preview renderer: a few workers each render a band of rows. Within a lane

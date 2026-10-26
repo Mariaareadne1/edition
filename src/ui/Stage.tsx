@@ -60,6 +60,8 @@ function paint(c: HTMLCanvasElement | null, image: ImageData) {
 }
 
 interface Drag {
+  /** the plate picked up at pointer-down; a plate switch mid-drag can never redirect the drag */
+  plate: 0 | 1
   x: number
   y: number
   start: Registration
@@ -83,6 +85,7 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
   const [readout, setReadout] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null)
   const [loupe, setLoupe] = useState<LoupePoint | null>(null)
   const [platesReady, setPlatesReady] = useState(false)
+  const [platesFailed, setPlatesFailed] = useState(false)
   const [snap, setSnap] = useState(false)
   const drag = useRef<Drag | null>(null)
   const pointers = useRef(new Set<number>())
@@ -149,7 +152,7 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
         if (live && r) paint(plateCanvas[k].current, r.image)
         return !!r
       }),
-    )).then((ok) => live && ok.every(Boolean) && setPlatesReady(true), () => {})
+    )).then((ok) => live && ok.every(Boolean) && setPlatesReady(true), () => live && setPlatesFailed(true))
     return () => {
       live = false
     }
@@ -157,22 +160,24 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [separated, pool, source, settings, longEdge, phone])
   useEffect(() => {
-    if (!separated) setPlatesReady(false)
+    if (separated) return
+    setPlatesReady(false)
+    setPlatesFailed(false)
   }, [separated])
 
   // A plate returned to exact register snaps visibly (a UI cue only; never in the print).
   const reg = settings.registration[activePlate]
   const registered = reg.dx === 0 && reg.dy === 0 && reg.rotate === 0
-  const wasRegistered = useRef(registered)
+  const wasRegistered = useRef({ plate: activePlate, registered })
   useEffect(() => {
-    if (registered && !wasRegistered.current) {
+    const was = wasRegistered.current
+    wasRegistered.current = { plate: activePlate, registered }
+    if (registered && !was.registered && was.plate === activePlate) {
       setSnap(true)
       const t = window.setTimeout(() => setSnap(false), 320)
-      wasRegistered.current = registered
       return () => window.clearTimeout(t)
     }
-    wasRegistered.current = registered
-  }, [registered])
+  }, [registered, activePlate])
 
   const canDrag = tool === 'move' && (view === 'print' || view === 'compare' || (view === 'ink1' && activePlate === 0) || (view === 'ink2' && activePlate === 1))
 
@@ -185,22 +190,28 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
     dismissHint()
   }
 
+  /** Put the plate back where the drag found it; the gesture closes with no undo step. */
+  const abortDrag = () => {
+    const d = drag.current
+    if (!d) return
+    drag.current = null
+    setReadout(null)
+    onPreview(withRegistration(settings, d.plate, d.start))
+    onCommit()
+  }
+
   const loupeAt = (e: ReactPointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
     setLoupe({ x: e.clientX - r.left, y: e.clientY - r.top, lifted: e.pointerType === 'touch' })
   }
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    // The first finger (or a mouse) starts a fresh count, so a lost pointer-up can't leave a phantom finger.
+    if (e.isPrimary) pointers.current.clear()
     pointers.current.add(e.pointerId)
     // A second finger means a pinch, not a drag: put the plate back where it started, with no undo step.
     if (pointers.current.size > 1) {
-      const d = drag.current
-      if (d) {
-        drag.current = null
-        setReadout(null)
-        onPreview(withRegistration(settings, activePlate, d.start))
-        onCommit()
-      }
+      abortDrag()
       return
     }
     if (e.button !== 0) return
@@ -212,7 +223,7 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
     if (!canDrag) return
     capture(e.currentTarget, e.pointerId)
     const r = e.currentTarget.getBoundingClientRect()
-    drag.current = { x: e.clientX, y: e.clientY, start: reg, pointerId: e.pointerId, mmPerPx: SHEET_LONG_EDGE_MM / Math.max(r.width, r.height), left: r.left, top: r.top }
+    drag.current = { plate: activePlate, x: e.clientX, y: e.clientY, start: reg, pointerId: e.pointerId, mmPerPx: SHEET_LONG_EDGE_MM / Math.max(r.width, r.height), left: r.left, top: r.top }
   }
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -222,9 +233,11 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
     }
     const d = drag.current
     if (!d || d.pointerId !== e.pointerId) return
+    // A mouse released where we couldn't see it (no capture): end the drag rather than keep following.
+    if (e.pointerType === 'mouse' && e.buttons === 0) return endDrag()
     const dx = clampOffset(d.start.dx + (e.clientX - d.x) * d.mmPerPx)
     const dy = clampOffset(d.start.dy + (e.clientY - d.y) * d.mmPerPx)
-    onPreview(withRegistration(settings, activePlate, { ...d.start, dx, dy }))
+    onPreview(withRegistration(settings, d.plate, { ...d.start, dx, dy }))
     setReadout({ x: e.clientX - d.left, y: e.clientY - d.top, dx, dy })
   }
 
@@ -233,10 +246,24 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
     if (drag.current?.pointerId === e.pointerId) endDrag()
   }
 
+  // The browser took the gesture (e.g. a pinch-zoom): undo the partial move.
+  const onPointerCancel = (e: ReactPointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(e.pointerId)
+    if (drag.current?.pointerId === e.pointerId) abortDrag()
+  }
+
+  // Picking up the other plate mid-drag ends the drag where it is.
+  useEffect(() => {
+    if (drag.current && drag.current.plate !== activePlate) endDrag()
+    // endDrag closes over the latest props; only a plate change should trigger this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlate])
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return // leave browser shortcuts (Alt+← back, ⌘←) alone
     const step = e.shiftKey ? 1 : 0.1
     const delta = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number]>)[e.key]
-    if (!delta) return
+    if (!delta || (tool === 'move' && !canDrag)) return
     e.preventDefault()
     if (tool === 'loupe') {
       // The loupe moves 1 mm (Shift: 5 mm) across the sheet.
@@ -247,7 +274,6 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
       })
       return
     }
-    if (!canDrag) return
     // Preview while the key is held; commit on keyup — one undo step per press-and-hold.
     onPreview(withRegistration(settings, activePlate, { ...reg, dx: clampOffset(reg.dx + delta[0] * step), dy: clampOffset(reg.dy + delta[1] * step) }))
   }
@@ -274,7 +300,7 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerEnd}
-          onPointerCancel={onPointerEnd}
+          onPointerCancel={onPointerCancel}
           onLostPointerCapture={onPointerEnd}
           onPointerLeave={(e) => tool === 'loupe' && e.pointerType === 'mouse' && setLoupe(null)}
           onKeyDown={onKeyDown}
@@ -306,11 +332,11 @@ export function Stage({ pool, source, settings, studio, busy, onPreview, onCommi
               <figcaption><span className="mono">0{k + 1}</span> {settings.inks[k].name} · {settings.screen.angles[k]}°</figcaption>
             </figure>
           ))}
-          {separated && !platesReady && <p className="fan__pulling">Pulling the plates…</p>}
+          {separated && !platesReady && <p className="fan__pulling">{platesFailed ? 'The plates could not be rendered.' : 'Pulling the plates…'}</p>}
         </div>
       </div>
       <p className="visually-hidden" aria-live="polite">
-        Plate {activePlate + 1} offset {reg.dx.toFixed(2)} by {reg.dy.toFixed(2)} millimetres
+        {readout ? '' : `Plate ${activePlate + 1} offset ${reg.dx.toFixed(2)} by ${reg.dy.toFixed(2)} millimetres`}
       </p>
     </div>
   )

@@ -48,15 +48,15 @@ export function Masthead({ edition, onOpenImage, onOpenProject, onExport }: Mast
       </div>
 
       <nav className="masthead__tools" aria-label="Project">
-        <div className="menu" ref={menuRef}>
-          <button type="button" className="tool-button masthead__open" aria-haspopup="true" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+        <div className="menu" ref={menuRef} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setMenu(false)}>
+          <button type="button" className="tool-button masthead__open" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
             Open<span aria-hidden="true" className="tool-button__caret">▾</span>
           </button>
           {menu && (
-            <ul className="menu__list" role="menu">
-              <li role="none"><button type="button" role="menuitem" autoFocus onClick={choose(() => imageInput.current?.click())}>Image…<span className="mono">JPEG · PNG · WebP</span></button></li>
-              <li role="none"><button type="button" role="menuitem" onClick={choose(() => projectInput.current?.click())}>Project…<span className="mono">.edition · .json</span></button></li>
-              <li role="none"><button type="button" role="menuitem" onClick={choose(actions.useSample)}>Sample<span className="mono">Harbour, dusk</span></button></li>
+            <ul className="menu__list">
+              <li><button type="button" autoFocus onClick={choose(() => imageInput.current?.click())}>Image…<span className="mono">JPEG · PNG · WebP</span></button></li>
+              <li><button type="button" onClick={choose(() => projectInput.current?.click())}>Project…<span className="mono">.edition · .json</span></button></li>
+              <li><button type="button" onClick={choose(actions.useSample)}>Sample<span className="mono">Harbour, dusk</span></button></li>
             </ul>
           )}
         </div>

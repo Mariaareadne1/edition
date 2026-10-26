@@ -37,11 +37,20 @@ const db = () => {
   return dbPromise
 }
 
-function run<T>(store: 'docs' | 'blobs', mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+function run<T>(store: 'docs' | 'blobs', mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>, retry = true): Promise<T> {
   return db().then(
     (d) =>
       new Promise<T>((resolve, reject) => {
-        const tx = d.transaction(store, mode)
+        let tx: IDBTransaction
+        try {
+          tx = d.transaction(store, mode)
+        } catch (err) {
+          // The connection was closed under us (versionchange): reopen once and try again.
+          dbPromise = null
+          if (retry) run(store, mode, fn, false).then(resolve, reject)
+          else reject(err instanceof Error ? err : new Error('IndexedDB transaction failed'))
+          return
+        }
         const req = fn(tx.objectStore(store))
         tx.oncomplete = () => resolve(req.result)
         tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'))

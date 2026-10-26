@@ -52,19 +52,25 @@ export function InkTray({ settings: s, studio, onPreview, onPush, onCommit }: In
   const sep = (patch: Partial<PrintSettings['separation']>) => ({ ...s, separation: { ...s.separation, ...patch } })
   const paper = (patch: Partial<PrintSettings['paper']>) => ({ ...s, paper: { ...s.paper, ...patch } })
 
-  // Phone sheet: focus moves in, Escape and the browser's Back button close it.
+  // Phone sheet: modal while open (the rest of the page is inert), focus moves in, and Escape or the
+  // browser's Back button close it. The history entry is popped once, by the cleanup, however it closes.
   useEffect(() => {
     if (!phone || !trayOpen) return
     heading.current?.focus()
     window.history.pushState({ editionTray: true }, '')
+    const behind = [...document.querySelectorAll<HTMLElement>('.masthead, .margin, .stage, .strip')]
+    for (const el of behind) el.inert = true
     const onPop = () => setTray(false)
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !(e.target as HTMLElement).closest('dialog') && window.history.back()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !(e.target as HTMLElement).closest('dialog') && setTray(false)
     window.addEventListener('popstate', onPop)
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('popstate', onPop)
       window.removeEventListener('keydown', onKey)
+      for (const el of behind) el.inert = false
       if ((window.history.state as { editionTray?: boolean } | null)?.editionTray) window.history.back()
+      // Focus returns to the button that opened the tray, whichever way it closed.
+      document.querySelector<HTMLButtonElement>('.rail__adjust')?.focus()
     }
   }, [phone, trayOpen, setTray])
 
@@ -76,16 +82,14 @@ export function InkTray({ settings: s, studio, onPreview, onPush, onCommit }: In
     requestAnimationFrame(() => drawer.current?.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' }))
   }, [drawerOpen])
 
-  const close = () => {
-    setTray(false)
-    document.querySelector<HTMLButtonElement>('.rail__adjust')?.focus()
-  }
+  const close = () => setTray(false)
 
   return (
     <>
     {/* Tapping the table behind the sheet closes it; keyboard and screen-reader users have the × and Escape. */}
     {phone && trayOpen && <div className="scrim" aria-hidden="true" onClick={close} />}
     <aside id="ink-tray" className={`tray${trayOpen ? ' is-open' : ''}`} aria-label="Ink tray"
+      role={phone ? 'dialog' : undefined} aria-modal={phone ? true : undefined}
       style={{ '--plate-ink': ink.color } as React.CSSProperties} hidden={phone && !trayOpen}>
       <header className="tray__head">
         <div className="tray__plates" role="group" aria-label="Plate">

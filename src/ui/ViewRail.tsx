@@ -53,12 +53,8 @@ export function ViewRail({ studio, settings }: { studio: Studio; settings: Print
           onPointerUp={() => a.setSeparated(false)}
           onPointerCancel={() => a.setSeparated(false)}
           onLostPointerCapture={() => a.setSeparated(false)}
-          onKeyDown={(e) => {
-            if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
-              e.preventDefault()
-              a.setSeparated(!separated)
-            }
-          }}
+          // Keyboard and assistive-tech activation (a click with no pointer press) toggles instead of holding.
+          onClick={(e) => e.detail === 0 && a.setSeparated(!separated)}
           onBlur={() => a.setSeparated(false)}
           onContextMenu={(e) => e.preventDefault()}>
           <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="5" width="9" height="11" transform="rotate(-6 7.5 10.5)" /><rect x="8" y="4" width="9" height="11" transform="rotate(6 12.5 9.5)" /></svg>

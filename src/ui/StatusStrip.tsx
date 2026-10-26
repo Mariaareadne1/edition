@@ -36,7 +36,7 @@ export function StatusStrip({ edition, status, view, activePlate, busy }: Status
       <span className="strip__item strip__mode mono">
         {VIEWS.find((v) => v.id === view)!.label.toLowerCase()} · plate 0{activePlate + 1} in hand
       </span>
-      <span className={`strip__item strip__status mono${save.kind === 'error' || status.error ? ' is-error' : ''}`} role="status" data-testid="proof-status">
+      <span className={`strip__item strip__status mono${save.kind === 'error' || status.error ? ' is-error' : ''}`} data-testid="proof-status">
         <span className="strip__source">{ready ? source.label : source.status === 'loading' ? source.message : 'No image'}</span>
         {' · '}
         <span className={status.busy || busy ? 'is-working' : ''}>{busy ?? proof}</span>

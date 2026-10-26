@@ -74,11 +74,17 @@ export default function App() {
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 's') setSeparated(false)
     }
+    // A held S whose keyup lands in another window must not leave the plates lifted.
+    const drop = () => setSeparated(false)
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', drop)
+    document.addEventListener('visibilitychange', drop)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', drop)
+      document.removeEventListener('visibilitychange', drop)
     }
   }, [actions, selectPlate, toggleLoupe, setSeparated])
 

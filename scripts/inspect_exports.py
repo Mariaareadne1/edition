@@ -4,10 +4,12 @@ Independent check of Edition's exported files, outside the JavaScript toolchain.
     python3 scripts/inspect_exports.py <dir> [--dx 0.6 --dy -0.4]
 
 <dir> holds print-composite.png, ink-1.png and ink-2.png (any prefix). Reports
-sizes, film properties and coverage, inked bounds, and measures how far each
-plate sits in the composite relative to its registered film (phase
-correlation on a central crop) — which should equal that plate's offset.
-Needs Pillow and numpy.
+sizes, film properties and coverage, inked bounds, and measures where each
+plate's registration marks land in the composite relative to the same marks
+on its registered film. Averaged over the four marks (top, bottom, left,
+right of the sheet centre) the rotation from skew cancels, leaving the
+plate's offset — which must equal the configured register. Needs Pillow
+and numpy.
 """
 import argparse
 import pathlib
@@ -26,15 +28,19 @@ def load(d: pathlib.Path, suffix: str) -> np.ndarray:
     return np.asarray(Image.open(files[-1]).convert("RGB"), dtype=np.float64)
 
 
-def shift(a: np.ndarray, b: np.ndarray) -> tuple[float, float]:
-    """Translation (x, y) in pixels that moves b onto a, by phase correlation."""
-    fa, fb = np.fft.fft2(a - a.mean()), np.fft.fft2(b - b.mean())
-    r = fa * np.conj(fb)
-    r /= np.abs(r) + 1e-9
-    c = np.fft.ifft2(r).real
-    y, x = np.unravel_index(np.argmax(c), c.shape)
-    h, w = c.shape
-    return (x - w if x > w / 2 else x, y - h if y > h / 2 else y)
+def centroid(weight: np.ndarray) -> tuple[float, float]:
+    ys, xs = np.mgrid[0 : weight.shape[0], 0 : weight.shape[1]]
+    t = weight.sum()
+    return (float((xs * weight).sum() / t), float((ys * weight).sum() / t))
+
+
+def mark_windows(w: int, h: int, margin: float) -> list[tuple[slice, slice]]:
+    """Windows around the four registration marks (render.ts markPositions, sheet units → px)."""
+    L = max(w, h)
+    gap = margin / 2 * L
+    half = int(margin * 0.28 * 1.2 * L) + 14  # the mark's extent (render.ts) plus ~1.2 mm of misregistration, clear of the image
+    centres = [(w / 2, gap), (w / 2, h - gap), (gap, h / 2), (w - gap, h / 2)]
+    return [(slice(int(cy - half), int(cy + half)), slice(int(cx - half), int(cx + half))) for cx, cy in centres]
 
 
 def main() -> None:
@@ -42,6 +48,7 @@ def main() -> None:
     ap.add_argument("dir", type=pathlib.Path)
     ap.add_argument("--dx", type=float, nargs=2, default=None, help="expected dx (mm) for plate 1 and 2")
     ap.add_argument("--dy", type=float, nargs=2, default=None, help="expected dy (mm) for plate 1 and 2")
+    ap.add_argument("--margin", type=float, default=0.07, help="paper margin as a fraction of the long edge")
     a = ap.parse_args()
 
     comp = load(a.dir, "print-composite.png")
@@ -58,22 +65,26 @@ def main() -> None:
         ys, xs = np.nonzero(cov > 0.5)
         print(f"ink-{k}: same size {same} · greyscale {grey} · coverage {cov.mean():.4f} · "
               f"inked bounds x {xs.min()}–{xs.max()} y {ys.min()}–{ys.max()}")
-        ok &= same and grey and cov.mean() > 0.001
+        ok &= same and grey and cov.max() > 0.5  # every film prints at least its marks
 
-    # Each ink's signal in the composite: cobalt absorbs red, vermilion absorbs green/blue but not red.
-    r, g, b = comp[..., 0], comp[..., 1], comp[..., 2]
-    signals = [255 - r, np.clip(r - g, 0, None)]
-    s = min(w, h) // 3
-    cy, cx = h // 2, w // 2
-    crop = (slice(cy - s // 2, cy + s // 2), slice(cx - s // 2, cx + s // 2))
+    # Each ink's mark in the composite: cobalt absorbs red; vermilion absorbs green but not red.
+    r, g = comp[..., 0], comp[..., 1]
+    signals = [np.clip(255 - r, 0, None), np.clip(r - g, 0, None)]
     for k in range(2):
-        film_cov = 255 - films[k][..., 0]
-        mx, my = shift(signals[k][crop], film_cov[crop])
-        line = f"plate {k + 1}: composite vs film shift {mx:+.0f}, {my:+.0f} px = {mx / px_per_mm:+.2f}, {my / px_per_mm:+.2f} mm"
+        film_ink = 255 - films[k][..., 0]
+        moves = []
+        for win in mark_windows(w, h, a.margin):
+            fx, fy = centroid(film_ink[win])
+            sig = signals[k][win]
+            sig = np.where(sig > sig.max() * 0.5, sig, 0)  # the mark's strokes, not paper tint
+            cx, cy = centroid(sig)
+            moves.append((cx - fx, cy - fy))
+        mx, my = np.mean(moves, axis=0)
+        line = f"plate {k + 1}: marks moved {mx:+.1f}, {my:+.1f} px = {mx / px_per_mm:+.2f}, {my / px_per_mm:+.2f} mm"
         if a.dx and a.dy:
             ex, ey = a.dx[k] * px_per_mm, a.dy[k] * px_per_mm
-            good = abs(mx - ex) <= 2 and abs(my - ey) <= 2
-            line += f" (expected {ex:+.1f}, {ey:+.1f} px) {'OK' if good else 'MISMATCH'}"
+            good = abs(mx - ex) <= 1.5 and abs(my - ey) <= 1.5
+            line += f" (register {a.dx[k]:+.2f}, {a.dy[k]:+.2f} mm = {ex:+.1f}, {ey:+.1f} px) {'OK' if good else 'MISMATCH'}"
             ok &= good
         print(line)
     print("PASS" if ok else "FAIL")
